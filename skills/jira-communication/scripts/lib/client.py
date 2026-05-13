@@ -353,11 +353,11 @@ class LazyJiraClient:
         return getattr(client, name)
 
     def jql(self, jql: str, limit: int = 50, start: int = 0, fields=None, **kwargs) -> dict:
-        """Execute a JQL search, using /rest/api/3/search/jql on Cloud.
+        """Execute a JQL search with offset-based pagination on both Cloud and Server/DC.
 
-        Atlassian removed /rest/api/2/search and /rest/api/3/search from Cloud
-        instances (see CHANGE-2046). The new endpoint is /rest/api/3/search/jql.
-        atlassian-python-api hardcodes api_version=2, so we bypass it for Cloud.
+        atlassian-python-api v4 deprecated offset pagination on Cloud (CHANGE-2046),
+        raising ValueError when start != 0. We bypass it by calling the
+        /rest/api/3/search/jql endpoint directly so existing callers keep working.
 
         On Server/DC the library's jql() method still works fine via api/2.
         """
@@ -375,18 +375,18 @@ class LazyJiraClient:
             # Server/DC: delegate to the library as normal
             return client.jql(jql, fields=fields, start=start, limit=limit, **kwargs)
 
-        # Cloud: use the new /rest/api/3/search/jql endpoint directly
+        # Cloud: use /rest/api/3/search/jql directly (offset-based pagination)
         if fields is None:
             fields = "*all"
         if isinstance(fields, (list, tuple, set)):
             fields = ",".join(fields)
-        params = {
+        params: dict = {
             "jql": jql,
             "startAt": start,
             "maxResults": limit,
             "fields": fields,
         }
-        if "expand" in kwargs and kwargs["expand"] is not None:
+        if kwargs.get("expand") is not None:
             params["expand"] = kwargs["expand"]
         return client.get("rest/api/3/search/jql", params=params) or {}
 

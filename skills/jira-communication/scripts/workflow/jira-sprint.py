@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0,<4",
+#     "atlassian-python-api>=4.0.0,<5",
 #     "click>=8.1.0,<9",
 # ]
 # ///
@@ -21,7 +21,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient
-from lib.output import error, format_output, format_table
+from lib.output import error, format_output, format_table, resolve_board_id, success
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -48,10 +48,10 @@ def cli(ctx, output_json: bool, quiet: bool, env_file: str | None, profile: str 
 
 
 @cli.command("list")
-@click.argument("board_id", type=int)
+@click.argument("board_id", type=int, required=False, default=None)
 @click.option("--state", "-s", type=click.Choice(["active", "future", "closed"]), help="Filter by sprint state")
 @click.pass_context
-def list_sprints(ctx, board_id: int, state: str | None):
+def list_sprints(ctx, board_id: int | None, state: str | None):
     """List sprints for a board.
 
     BOARD_ID: The Jira agile board ID
@@ -65,6 +65,7 @@ def list_sprints(ctx, board_id: int, state: str | None):
       jira-sprint list 42 --state future --json
     """
     client = ctx.obj["client"]
+    board_id = resolve_board_id(board_id)
 
     try:
         # Get sprints using agile API
@@ -176,9 +177,9 @@ def issues(ctx, sprint_id: int, fields: str):
 
 
 @cli.command()
-@click.argument("board_id", type=int)
+@click.argument("board_id", type=int, required=False, default=None)
 @click.pass_context
-def current(ctx, board_id: int):
+def current(ctx, board_id: int | None):
     """Get the current active sprint for a board.
 
     BOARD_ID: The Jira agile board ID
@@ -188,6 +189,7 @@ def current(ctx, board_id: int):
       jira-sprint current 42
     """
     client = ctx.obj["client"]
+    board_id = resolve_board_id(board_id)
 
     try:
         # Get active sprints (first page is enough for "current")
@@ -218,6 +220,94 @@ def current(ctx, board_id: int):
         if ctx.obj["debug"]:
             raise
         error(f"Failed to get current sprint for board {board_id}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("sprint_id", type=int)
+@click.argument("issues", nargs=-1, required=True)
+@click.option("--dry-run", is_flag=True, help="Show what would be done without making changes")
+@click.pass_context
+def add(ctx, sprint_id: int, issues: tuple[str, ...], dry_run: bool):
+    """Add one or more issues to a sprint.
+
+    SPRINT_ID: The sprint ID
+    ISSUES: One or more issue keys (e.g. PROJ-123 PROJ-456)
+
+    Examples:
+
+      jira-sprint add 42 PROJ-123
+
+      jira-sprint add 42 PROJ-123 PROJ-456 PROJ-789
+
+      jira-sprint add 42 PROJ-123 --dry-run
+    """
+    client = ctx.obj["client"]
+    keys = list(issues)
+
+    if dry_run:
+        format_output({"dry_run": True, "sprint_id": sprint_id, "issues": keys}, as_json=ctx.obj["output_json"])
+        if not ctx.obj["output_json"] and not ctx.obj["quiet"]:
+            print(f"Would add {len(keys)} issue(s) to sprint {sprint_id}: {', '.join(keys)}")
+        return
+
+    try:
+        client.post(
+            f"rest/agile/1.0/sprint/{sprint_id}/issue",
+            data={"issues": keys},
+        )
+        result = {"sprint_id": sprint_id, "issues": keys, "action": "added"}
+        if ctx.obj["output_json"]:
+            format_output(result, as_json=True)
+        elif not ctx.obj["quiet"]:
+            success(f"Added {len(keys)} issue(s) to sprint {sprint_id}: {', '.join(keys)}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to add issues to sprint {sprint_id}: {e}")
+        sys.exit(1)
+
+
+@cli.command()
+@click.argument("issues", nargs=-1, required=True)
+@click.option("--dry-run", is_flag=True, help="Show what would be done without making changes")
+@click.pass_context
+def remove(ctx, issues: tuple[str, ...], dry_run: bool):
+    """Remove one or more issues from their current sprint (move to backlog).
+
+    ISSUES: One or more issue keys (e.g. PROJ-123 PROJ-456)
+
+    Examples:
+
+      jira-sprint remove PROJ-123
+
+      jira-sprint remove PROJ-123 PROJ-456
+
+      jira-sprint remove PROJ-123 --dry-run
+    """
+    client = ctx.obj["client"]
+    keys = list(issues)
+
+    if dry_run:
+        format_output({"dry_run": True, "issues": keys}, as_json=ctx.obj["output_json"])
+        if not ctx.obj["output_json"] and not ctx.obj["quiet"]:
+            print(f"Would remove {len(keys)} issue(s) from their sprint: {', '.join(keys)}")
+        return
+
+    try:
+        client.post(
+            "rest/agile/1.0/backlog/issue",
+            data={"issues": keys},
+        )
+        result = {"issues": keys, "action": "moved_to_backlog"}
+        if ctx.obj["output_json"]:
+            format_output(result, as_json=True)
+        elif not ctx.obj["quiet"]:
+            success(f"Moved {len(keys)} issue(s) to backlog: {', '.join(keys)}")
+    except Exception as e:
+        if ctx.obj["debug"]:
+            raise
+        error(f"Failed to remove issues from sprint: {e}")
         sys.exit(1)
 
 

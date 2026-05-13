@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0,<4",
+#     "atlassian-python-api>=4.0.0,<5",
 #     "click>=8.1.0,<9",
 # ]
 # ///
@@ -21,7 +21,7 @@ if _lib_path.exists():
 
 import click
 from lib.client import LazyJiraClient
-from lib.output import error, format_output, format_table
+from lib.output import error, format_output, format_table, resolve_board_id
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # CLI Definition
@@ -124,14 +124,14 @@ def list_boards(ctx, project: str | None, board_type: str | None, name_pattern: 
 
 
 @cli.command()
-@click.argument("board_id", type=int)
+@click.argument("board_id", type=int, required=False, default=None)
 @click.option("--jql", help="Additional JQL filter")
 @click.option("--max-results", "-n", default=50, help="Maximum results")
 @click.pass_context
-def issues(ctx, board_id: int, jql: str | None, max_results: int):
+def issues(ctx, board_id: int | None, jql: str | None, max_results: int):
     """Get issues on a board.
 
-    BOARD_ID: The Jira agile board ID
+    BOARD_ID: The Jira agile board ID (or set JIRA_BOARD_ID env var)
 
     Examples:
 
@@ -142,6 +142,7 @@ def issues(ctx, board_id: int, jql: str | None, max_results: int):
       jira-board issues 42 --max-results 20
     """
     client = ctx.obj["client"]
+    board_id = resolve_board_id(board_id)
 
     try:
         params = {"maxResults": max_results}

@@ -237,4 +237,22 @@ def comment_to_text(comment) -> str:
     return str(comment)
 
 
+def resolve_board_id(board_id: int | None) -> int:
+    """Return board_id, falling back to JIRA_BOARD_ID env var.
+
+    Exits with an error message if neither source provides a valid integer.
+    """
+    import os
+
+    if board_id is not None:
+        return board_id
+    env_val = os.environ.get("JIRA_BOARD_ID", "").strip()
+    if env_val:
+        try:
+            return int(env_val)
+        except ValueError:
+            error(f"JIRA_BOARD_ID='{env_val}' is not a valid integer")
+    error("BOARD_ID is required (pass it as argument or set JIRA_BOARD_ID env var)")
+    raise SystemExit(1)
+
 # === INLINE_END: output ===

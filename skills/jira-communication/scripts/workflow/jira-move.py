@@ -2,7 +2,7 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#     "atlassian-python-api>=3.41.0,<4",
+#     "atlassian-python-api>=4.0.0,<5",
 #     "click>=8.1.0,<9",
 #     "requests>=2.31.0,<3",
 # ]

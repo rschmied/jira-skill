@@ -79,3 +79,5 @@ uv run ${CLAUDE_SKILL_DIR}/scripts/core/jira-attachment.py add PROJ-123 screensh
 ## Authentication
 
 Cloud: `JIRA_URL` + `JIRA_USERNAME` + `JIRA_API_TOKEN`. Server/DC: `JIRA_URL` + `JIRA_PERSONAL_TOKEN`. Config via `~/.env.jira` or `~/.jira/profiles.json`.
+
+Optional: `JIRA_BOARD_ID` — default agile board ID used by `jira-sprint list`, `jira-sprint current`, and `jira-board issues` when no `BOARD_ID` argument is given.
